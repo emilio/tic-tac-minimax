@@ -1,0 +1,4 @@
+[root]
+name = "tic-tac-minimax"
+version = "0.1.0"
+
