@@ -2,6 +2,7 @@
 
 use state::State;
 use state::CheckBox;
+use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Debug)]
@@ -34,7 +35,7 @@ impl MiniMaxTree {
 
     /// Ensures we have computed at least up to `depth` levels in the tree.
     pub fn depth(&self) -> usize {
-        self.current_state.max_depth(0)
+        self.current_state.max_computed_depth(0)
     }
 
     /// Returns the current state of the game.
@@ -58,6 +59,43 @@ impl MiniMaxTree {
 
         self.current_state = new_state.take();
         Ok(())
+    }
+
+    /// Finds a min/max move index for the next round.
+    ///
+    /// Returns `None` if the game is already over, or if `max_depth` is zero.
+    pub fn find_move_index(
+        &mut self,
+        max_depth: usize)
+        -> Option<usize>
+    {
+        use std::i8;
+
+        if self.current_state.score() != 0 || max_depth == 0 {
+            // It's over already, or we didn't have any chances of computing it.
+            return None;
+        }
+
+        let maximizing = self.current_state.player as i8 > 0;
+
+        let mut best = if maximizing { i8::MIN } else { i8::MAX };
+        let mut best_move = None;
+
+        for (i, child) in self.current_state.ensure_children().iter_mut().enumerate() {
+            let child_score = child.minimax(max_depth - 1);
+            let child_is_best_so_far = if maximizing {
+                child_score > best
+            } else {
+                child_score < best
+            };
+
+            if child_is_best_so_far {
+                best = child_score;
+                best_move = Some(i);
+            }
+        }
+
+        best_move
     }
 }
 
@@ -101,25 +139,51 @@ impl MiniMaxNode {
         }
     }
 
-    fn max_depth(&self, this_depth: usize) -> usize {
+    fn max_computed_depth(&self, this_depth: usize) -> usize {
         use std::cmp;
 
         let mut max = this_depth;
 
         if let Some(ref children) = self.children {
             for child in children.iter() {
-                max = cmp::max(max, child.max_depth(this_depth + 1));
+                max = cmp::max(max, child.max_computed_depth(this_depth + 1));
             }
         }
 
         max
     }
 
+    fn minimax(&mut self, max_depth: usize) -> i8 {
+        use std::{cmp, i8};
+
+        if max_depth == 0 {
+            return self.score();
+        }
+
+        if self.ensure_children().is_empty() {
+            return self.state.score();
+        }
+
+        let maximizing = self.player as i8 > 0;
+        let children = self.ensure_children();
+
+        let mut best = if maximizing { i8::MIN } else { i8::MAX };
+        for child in children {
+            let val = child.minimax(max_depth - 1);
+            best = if maximizing {
+                cmp::max(val, best)
+            } else {
+                cmp::min(val, best)
+            };
+        }
+        best
+    }
+
     /// Ensures to have computed the children states for this state.
     fn ensure_children(&mut self) -> &mut [MiniMaxNode] {
         if self.children.is_none() {
             let children =
-                if self.state.score() != 0 {
+                if self.score() != 0 {
                     // This is a game over state, so just prune here.
                     vec![].into_boxed_slice()
                 } else {
