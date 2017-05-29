@@ -1,19 +1,40 @@
+use std::fmt;
+
 /// The state of a given box in the tic-tac-toe game.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(i8)]
-enum CheckBox {
+pub enum CheckBox {
     Empty = 0,
     X = -10,
     O = 10,
 }
 
+impl CheckBox {
+    /// Returns the next player, if `self` has moved.
+    pub fn next_player(&self) -> Self {
+        match *self {
+            CheckBox::Empty => CheckBox::Empty,
+            CheckBox::X => CheckBox::O,
+            CheckBox::O => CheckBox::X,
+        }
+    }
+
+    fn dump_char(&self) -> char {
+        match *self {
+            CheckBox::Empty => '_',
+            CheckBox::X => 'X',
+            CheckBox::O => 'O',
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-struct State {
+pub struct State {
     field: [[CheckBox; 3]; 3],
 }
 
 impl State {
-    fn new() -> Self {
+    pub fn initial() -> Self {
         Self {
             field: [
                 [CheckBox::Empty, CheckBox::Empty, CheckBox::Empty],
@@ -23,9 +44,37 @@ impl State {
         }
     }
 
+    pub fn dump<W>(&self, indent: usize, dest: &mut W) -> fmt::Result
+        where W: fmt::Write,
+    {
+        for i in 0..3 {
+            for _ in 0..indent {
+                dest.write_char(' ')?;
+            }
+            self.dump_row(i, dest)?;
+            dest.write_char('\n')?;
+        }
+
+        Ok(())
+    }
+
+    pub fn dump_row<W>(&self, index: usize, dest: &mut W) -> fmt::Result
+        where W: fmt::Write,
+    {
+        let row = self.field[index];
+        dest.write_char('[')?;
+        dest.write_char(row[0].dump_char())?;
+        dest.write_char(' ')?;
+        dest.write_char(row[1].dump_char())?;
+        dest.write_char(' ')?;;
+        dest.write_char(row[2].dump_char())?;
+        dest.write_char(']')
+    }
+
+
     /// For a given state, iterate over all the possible child states created by
     /// a single move of the piece `c`, which can't be empty.
-    fn subsequent_states<'a>(
+    pub fn subsequent_states<'a>(
         &'a self,
         player: CheckBox
     ) -> SubsequentStatesIterator<'a> {
@@ -40,7 +89,7 @@ impl State {
     }
 
     /// TODO(emilio): This can be much more efficient, but you know...
-    fn score(&self) -> i8 {
+    pub fn score(&self) -> i8 {
         return self.row_score(0) +
             self.row_score(1) +
             self.row_score(2) +
@@ -71,6 +120,10 @@ impl State {
         return first as i8
     }
 
+    pub fn get(&self, x: usize, y: usize) -> CheckBox {
+        self.field[x][y]
+    }
+
     fn main_diagonal_score(&self) -> i8 {
         let center = self.field[1][1];
         for i in 0..3 {
@@ -85,7 +138,7 @@ impl State {
     fn cross_diagonal_score(&self) -> i8 {
         let center = self.field[1][1];
         for i in 0..3 {
-            if self.field[i][3 - i] != center {
+            if self.field[i][3 - i - 1] != center {
                 return 0;
             }
         }
@@ -93,7 +146,7 @@ impl State {
     }
 }
 
-struct SubsequentStatesIterator<'a> {
+pub struct SubsequentStatesIterator<'a> {
     initial_state: &'a State,
     row: usize,
     col: usize,
@@ -104,15 +157,16 @@ impl<'a> Iterator for SubsequentStatesIterator<'a> {
     type Item = State;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.row != 3 || self.col != 3 {
+        while self.row != 3 {
             if self.col == 3 {
                 self.row += 1;
                 self.col = 0;
+                continue;
             }
             if self.initial_state.field[self.row][self.col] == CheckBox::Empty {
                 self.col += 1;
                 let mut ret = self.initial_state.clone();
-                ret.field[self.row][self.col] = self.player;
+                ret.field[self.row][self.col - 1] = self.player;
                 return Some(ret)
             }
             self.col += 1;
