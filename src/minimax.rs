@@ -55,10 +55,33 @@ impl MiniMaxTree {
         let mut current_state = self.current_state.take();
         let mut new_state = current_state.ensure_children().iter_mut().find(|s| {
             s.state.get(x, y) == current_player
-        }).expect("subsequent_states failed to calculate a possible move?");
+        });
 
-        self.current_state = new_state.take();
+        let new_state = match new_state {
+            None => {
+                // If we couldn't find a state here, it means that the game is
+                // over, compute it from the subsequents states.
+                //
+                // NOTE(emilio): We don't really need to iterate this, but seems
+                // cheap enough.
+                let s = self.current_state.state.subsequent_states(current_player).find(|s| {
+                    s.get(x, y) == current_player
+                }).unwrap();
+                assert_ne!(s.score(), 0);
+                MiniMaxNode::new(s, current_player.next_player())
+            }
+            Some(mut new_state) => new_state.take(),
+        };
+
+        self.current_state = new_state;
+
         Ok(())
+    }
+
+    pub fn choose_with_index(&mut self, index: usize) {
+        let mut current_state = self.current_state.take();
+        let mut new_state = &mut current_state.ensure_children()[index];
+        self.current_state = new_state.take();
     }
 
     /// Finds a min/max move index for the next round.

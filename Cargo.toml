@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Emilio Cobos Álvarez <emilio@crisal.io>"]
 
 [dependencies]
+gtk = "0.1"
