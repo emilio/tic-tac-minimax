@@ -107,14 +107,25 @@ impl State {
 
     /// TODO(emilio): This can be much more efficient, but you know...
     pub fn score(&self) -> i8 {
-        return self.row_score(0) +
-            self.row_score(1) +
-            self.row_score(2) +
-            self.column_score(0) +
-            self.column_score(1) +
-            self.column_score(2) +
-            self.main_diagonal_score() +
-            self.cross_diagonal_score();
+        macro_rules! return_if_nonzero {
+            ($e:expr) => {
+                {
+                    let v = $e;
+                    if v != 0 {
+                        return v;
+                    }
+                }
+            }
+        }
+        return_if_nonzero!(self.row_score(0));
+        return_if_nonzero!(self.row_score(1));
+        return_if_nonzero!(self.row_score(2));
+        return_if_nonzero!(self.column_score(0));
+        return_if_nonzero!(self.column_score(1));
+        return_if_nonzero!(self.column_score(2));
+        return_if_nonzero!(self.main_diagonal_score());
+        return_if_nonzero!(self.cross_diagonal_score());
+        0
     }
 
     fn row_score(&self, row: usize) -> i8 {
