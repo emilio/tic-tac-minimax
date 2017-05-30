@@ -8,7 +8,7 @@ use state::CheckBox;
 
 use gtk::{BoxExt, Cast, EntryExt, WidgetExt, WindowExt, ContainerExt, ButtonExt};
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 struct App {

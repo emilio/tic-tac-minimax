@@ -2,7 +2,6 @@
 
 use state::State;
 use state::CheckBox;
-use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Debug)]
@@ -22,20 +21,11 @@ impl MiniMaxTree {
     }
 
     /// Ensures we have computed at least up to `depth` levels in the tree.
-    pub fn update_to_depth(&mut self, depth: usize) {
-        self.current_state.update(0, depth);
-    }
-
-    /// Ensures we have computed at least up to `depth` levels in the tree.
+    #[allow(dead_code)] // This is just for debugging.
     pub fn dump<W>(&self, dest: &mut W) -> fmt::Result
         where W: fmt::Write,
     {
         self.current_state.dump(0, dest)
-    }
-
-    /// Ensures we have computed at least up to `depth` levels in the tree.
-    pub fn depth(&self) -> usize {
-        self.current_state.max_computed_depth(0)
     }
 
     /// Returns the current state of the game.
@@ -47,13 +37,14 @@ impl MiniMaxTree {
     ///
     /// Returns an error if the square was not empty.
     pub fn choose(&mut self, x: usize, y: usize) -> Result<(), ()> {
-        if self.current_state.state.get(x, y) != CheckBox::Empty {
+        if self.current_state.state.get(x, y) != CheckBox::Empty ||
+            self.current_state.score() != 0 {
             return Err(());
         }
 
         let current_player = self.current_state.player;
         let mut current_state = self.current_state.take();
-        let mut new_state = current_state.ensure_children().iter_mut().find(|s| {
+        let new_state = current_state.ensure_children().iter_mut().find(|s| {
             s.state.get(x, y) == current_player
         });
 
@@ -92,7 +83,37 @@ impl MiniMaxTree {
         max_depth: usize)
         -> Option<usize>
     {
+        let mut nodes_visited_pruning = 0;
+        let move_pruning = self.find_move_index_internal(
+            max_depth,
+            /* prune = */ true,
+            &mut nodes_visited_pruning);
+
+        if cfg!(debug_assertions) {
+            let mut nodes_visited_without_pruning = 0;
+            let move_without_pruning = self.find_move_index_internal(
+                max_depth,
+                /* prune = */ false,
+                &mut nodes_visited_without_pruning,
+            );
+
+            // This is the whole point of it!
+            assert_eq!(move_pruning, move_without_pruning);
+            assert!(nodes_visited_pruning <= nodes_visited_without_pruning);
+        }
+
+        move_pruning
+    }
+
+    fn find_move_index_internal(
+        &mut self,
+        max_depth: usize,
+        prune: bool,
+        nodes_visited: &mut usize,
+    ) -> Option<usize>
+    {
         use std::i8;
+        *nodes_visited = 0;
 
         if self.current_state.score() != 0 || max_depth == 0 {
             // It's over already, or we didn't have any chances of computing it.
@@ -104,8 +125,18 @@ impl MiniMaxTree {
         let mut best = if maximizing { i8::MIN } else { i8::MAX };
         let mut best_move = None;
 
+        let mut alpha = i8::MIN;
+        let mut beta = i8::MAX;
+
         for (i, child) in self.current_state.ensure_children().iter_mut().enumerate() {
-            let child_score = child.minimax(max_depth - 1);
+            let child_score = child.minimax(
+                max_depth - 1,
+                alpha,
+                beta,
+                prune,
+                nodes_visited
+            );
+
             let child_is_best_so_far = if maximizing {
                 child_score > best
             } else {
@@ -114,6 +145,11 @@ impl MiniMaxTree {
 
             if child_is_best_so_far {
                 best = child_score;
+                if maximizing {
+                    alpha = best;
+                } else {
+                    beta = best;
+                }
                 best_move = Some(i);
             }
         }
@@ -151,33 +187,16 @@ impl MiniMaxNode {
         }
     }
 
-    /// Ensures we've computed children up to depth `max_depth`.
-    fn update(&mut self, depth: usize, max_depth: usize) {
-        if depth == max_depth {
-            return;
-        }
-
-        for child in self.ensure_children() {
-            child.update(depth + 1, max_depth);
-        }
-    }
-
-    fn max_computed_depth(&self, this_depth: usize) -> usize {
-        use std::cmp;
-
-        let mut max = this_depth;
-
-        if let Some(ref children) = self.children {
-            for child in children.iter() {
-                max = cmp::max(max, child.max_computed_depth(this_depth + 1));
-            }
-        }
-
-        max
-    }
-
-    fn minimax(&mut self, max_depth: usize) -> i8 {
+    fn minimax(
+        &mut self,
+        max_depth: usize,
+        mut alpha: i8,
+        mut beta: i8,
+        prune: bool,
+        nodes_visited: &mut usize,
+    ) -> i8 {
         use std::{cmp, i8};
+        *nodes_visited += 1;
 
         if max_depth == 0 {
             return self.score();
@@ -192,12 +211,31 @@ impl MiniMaxNode {
 
         let mut best = if maximizing { i8::MIN } else { i8::MAX };
         for child in children {
-            let val = child.minimax(max_depth - 1);
+            let val = child.minimax(
+                max_depth - 1,
+                alpha,
+                beta,
+                prune,
+                nodes_visited
+            );
+
             best = if maximizing {
                 cmp::max(val, best)
             } else {
                 cmp::min(val, best)
             };
+
+            if maximizing {
+                if best > beta && prune {
+                    return best;
+                }
+                alpha = cmp::max(best, alpha);
+            } else {
+                if best < alpha && prune {
+                    return best;
+                }
+                beta = cmp::min(best, beta);
+            }
         }
         best
     }
