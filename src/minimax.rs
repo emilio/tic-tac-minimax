@@ -88,7 +88,7 @@ impl MiniMaxTree {
 
     pub fn choose_with_index(&mut self, index: usize) {
         let mut current_state = self.current_state.take();
-        let mut new_state = &mut current_state.ensure_children()[index];
+        let new_state = &mut current_state.ensure_children()[index];
         self.current_state = new_state.take();
     }
 
