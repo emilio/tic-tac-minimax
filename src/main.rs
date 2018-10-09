@@ -23,7 +23,7 @@ mod state;
 use minimax::MiniMaxTree;
 use state::CheckBox;
 
-use gtk::{BoxExt, Cast, EntryExt, WidgetExt, WindowExt, ContainerExt, ButtonExt};
+use gtk::{BoxExt, Cast, EntryExt, GridExt, GtkWindowExt, WidgetExt, ContainerExt, ButtonExt};
 
 use std::cell::RefCell;
 use std::rc::Rc;
